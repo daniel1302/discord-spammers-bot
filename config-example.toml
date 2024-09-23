@@ -1,0 +1,17 @@
+bot_token = "PUT TOKER here"
+report_channel = "" # the channel id where bot sends deleted or suspicious messages
+
+messages_keep_track_count = 10000 # number of messaged to keep track of
+
+moderated_channels = [
+    "12345678", # general
+    "78901234", # random
+    "56789432", # another-channel
+]
+
+moderated_keywords = [
+    "pm",
+    "support",
+    "ticket",
+    "dm",
+]
