@@ -13,6 +13,11 @@ moderated_channels = [
     # When someone deletes its message it is posted to the ${report_channel}
     [features.report_deleted_messages]
         enabled = true
+        # messages deleted by members of below roles won't be reported
+        whitelisted_roles = [
+            "Admins",
+            "Validators"
+        ]
 
 
     # When any of given in the ${moderated_keywords} keyword is present in the new mesasge it is reported to the ${report_channel}
@@ -25,9 +30,16 @@ moderated_channels = [
             "dm",
         ]
 
+        # messages sent by members of below roles won't be reported
+        whitelisted_roles = [
+            "Admins",
+            "Validators"
+        ]
+
     # When some one posts the discord invitation it is removed
     [features.delete_invite_links]
         enabled = true
+        # messages with invitations by members of below roles won't be deleted
         whitelisted_roles = [
             "Admins",
             "Validators"
