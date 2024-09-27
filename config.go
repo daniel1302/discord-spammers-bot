@@ -13,8 +13,34 @@ type Config struct {
 
 	MessageKeepTrackCount int `toml:"messages_keep_track_count"`
 
+	Features ConfigFeatures `toml:"features"`
+
 	ModeratedChannels []string `toml:"moderated_channels"`
 	ModeratedKeywords []string `toml:"moderated_keywords"`
+}
+
+type ConfigSuspiciousMessage struct {
+	Enabled          bool     `toml:"enabled"`
+	Keywords         []string `toml:"keywords"`
+	WhiteListedRoles []string `toml:"whitelisted_roles"`
+}
+
+type ConfigReportDeletedMessages struct {
+	Enabled          bool     `toml:"enabled"`
+	WhiteListedRoles []string `toml:"whitelisted_roles"`
+}
+
+type ConfigDeleteInviteLinks struct {
+	Enabled          bool     `toml:"enabled"`
+	WhiteListedRoles []string `toml:"whitelisted_roles"`
+}
+
+type ConfigFeatures struct {
+	SuspiciousMessage ConfigSuspiciousMessage `toml:"suspicious_messages"`
+
+	ReportDeletedMessages ConfigReportDeletedMessages `toml:"report_deleted_messages"`
+
+	DeleteInviteLinks ConfigDeleteInviteLinks `toml:"delete_invite_links"`
 }
 
 func ReadConfigFile(configFilePath string) (*Config, error) {
