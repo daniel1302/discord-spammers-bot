@@ -9,9 +9,26 @@ moderated_channels = [
     "56789432", # another-channel
 ]
 
-moderated_keywords = [
-    "pm",
-    "support",
-    "ticket",
-    "dm",
-]
+[features]
+    # When someone deletes its message it is posted to the ${report_channel}
+    [report_deleted_messages]
+        enabled = true
+
+
+    # When any of given in the ${moderated_keywords} keyword is present in the new mesasge it is reported to the ${report_channel}
+    [suspicious_messages]
+        enabled = true
+        keywords = [
+            "pm",
+            "support",
+            "ticket",
+            "dm",
+        ]
+
+    # When some one posts the discord invitation it is removed
+    [delete_invite_links]
+        enabled = true
+        whitelisted_roles = [
+            "Admins",
+            "Validators"
+        ]

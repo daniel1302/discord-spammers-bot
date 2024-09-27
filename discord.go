@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -18,10 +19,12 @@ func Run(logger *zap.Logger, config *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize bot: %w", err)
 	}
+	bot := NewDiscordBot(*config)
 
 	// add a event handler
-	discord.AddHandler(newMessageHandler(logger, config.ReportChannel, config.ModeratedKeywords))
-	discord.AddHandler(deleteMessageHandler(logger, config.ReportChannel))
+	discord.AddHandler(readyHandler(logger, bot))
+	discord.AddHandler(newMessageHandler(logger, bot, *config))
+	discord.AddHandler(deleteMessageHandler(logger, *config, bot))
 
 	// open session
 	discord.Open()
@@ -32,6 +35,18 @@ func Run(logger *zap.Logger, config *Config) error {
 	}
 
 	discord.State.MaxMessageCount = config.MessageKeepTrackCount
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	appCtx, appCtxCancel := context.WithCancel(context.Background())
+	defer appCtxCancel()
+	go bot.CacheRoles(appCtx, logger, discord)
+
+	// Wait until bot is ready
+	if err := bot.WaitUntilReady(ctx); err != nil {
+		return fmt.Errorf("bot is not ready until: %w", err)
+	}
 
 	// keep bot running untill there is NO os interruption (ctrl + C)
 	logger.Info("Bot running....")
@@ -51,7 +66,7 @@ func registerChannelsModeration(logger *zap.Logger, discord *discordgo.Session, 
 
 		err = discord.State.ChannelAdd(channel)
 		if err != nil {
-			return fmt.Errorf("cannot add channel %s(%s) to the state world: %w\n", channel.Name, channel.ID, err)
+			return fmt.Errorf("cannot add channel %s(%s) to the state world: %w", channel.Name, channel.ID, err)
 		}
 
 		logger.Sugar().Infof("channel %s(%s) added to the state word", channel.Name, channelId)
@@ -60,61 +75,92 @@ func registerChannelsModeration(logger *zap.Logger, discord *discordgo.Session, 
 	return nil
 }
 
-func newMessageHandler(logger *zap.Logger, administrationChannelId string, moderatedKeywords []string) interface{} {
+func newMessageHandler(logger *zap.Logger, bot *DiscordBot, config Config) interface{} {
 	return func(discord *discordgo.Session, message *discordgo.MessageCreate) {
-		if message.Author.ID == discord.State.User.ID {
-			return
-		}
+		reportSuspiciousMessage(logger, message, discord, bot, config.Features.SuspiciousMessage, config.ReportChannel)
 
-		// We can do nothing when message content is empty
-		if message.Content == "" {
-			logger.Sugar().Warnf("cannot get message content for message id %s", message.ID)
-			return
-		}
-
-		suspicious := false
-		for _, keyword := range moderatedKeywords {
-			if strings.Contains(strings.ToLower(message.Content), strings.ToLower(keyword)) {
-				suspicious = true
-			}
-		}
-
-		if !suspicious {
-			return
-		}
-
-		logMessage := fmt.Sprintf("Suspicious message on the server\n================================\nAuthor: <@%s>\nChannel: <#%s>\nMessage: ```%s```",
-			message.Author.ID,
-			message.ChannelID,
-			message.Content,
-		)
-		logger.Info(logMessage)
-
-		discord.ChannelMessageSend(administrationChannelId, logMessage)
+		deleteInviteLinks(logger, message, discord, bot, config.Features.DeleteInviteLinks, config.ReportChannel)
 	}
 }
 
-func deleteMessageHandler(logger *zap.Logger, administrationChannelId string) interface{} {
+func deleteMessageHandler(logger *zap.Logger, config Config, bot *DiscordBot) interface{} {
 	return func(discord *discordgo.Session, message *discordgo.MessageDelete) {
-		// If BeforeDelete is empty, there is nothing more We can do, as We lost track of this message.
-		if message.BeforeDelete == nil {
-			logger.Sugar().Warnf("Message %s is not in the state", message.ID)
-			return
+		reportDeletedMessage(logger, message, discord, config.Features.ReportDeletedMessages, bot, config.ReportChannel)
+	}
+}
+
+func readyHandler(logger *zap.Logger, bot *DiscordBot) interface{} {
+	return func(discord *discordgo.Session, ready *discordgo.Ready) {
+		guilds := []string{}
+		for _, guild := range ready.Guilds {
+			guilds = append(guilds, guild.ID)
+		}
+		if len(guilds) > 0 {
+			bot.UpdateGuildsIDs(guilds)
+		} else {
+			logger.Warn("failed to get list of guilds from the ready event")
 		}
 
-		if message.BeforeDelete.Author == nil {
-			logger.Sugar().Warnf("Message author for %s is not in the state", message.ID)
-			return
+		if ready.Application != nil && len(ready.Application.ID) > 0 {
+			bot.UpdateApplicationId(ready.Application.ID)
+		} else {
+			logger.Warn("failed to get application id from the ready event")
 		}
+	}
+}
 
-		logMessage := fmt.Sprintf("New deleted message on the server\n=================================\nAuthor: <@%s>\nChannel: <#%s>\nMessage: ```%s```",
-			message.BeforeDelete.Author.ID,
-			message.BeforeDelete.ChannelID,
-			message.BeforeDelete.Content,
-		)
-		logger.Info(logMessage)
+func cachedUser(logger *zap.Logger, discord *discordgo.Session, bot *DiscordBot, UserId string) (*ServerUser, error) {
+	userDetails := bot.CachedUser(UserID(UserId))
 
-		discord.ChannelMessageSend(administrationChannelId, logMessage)
+	if userDetails != nil {
+		return userDetails, nil
 	}
 
+	for _, guildId := range bot.GuildsIDs() {
+		user, err := discord.GuildMember(guildId, UserId)
+		if err != nil {
+			logger.Sugar().Debugf("user %s does not belong to guild %s: %s", UserId, guildId, err.Error())
+			continue
+		}
+
+		if user == nil {
+			logger.Sugar().Warnf("user %s does belong to guild %s, but details not available", UserId, guildId)
+			continue
+		}
+
+		roles := []RoleName{}
+		for _, roleId := range user.Roles {
+			roles = append(roles, bot.CachedRole(RoleID(roleId)))
+		}
+
+		userDetails := ServerUser{
+			ID:       UserID(UserId),
+			Username: user.User.Username,
+			Roles:    roles,
+		}
+
+		bot.AddCachedUser(UserID(UserId), userDetails)
+
+		return &userDetails, nil
+	}
+
+	return nil, fmt.Errorf("failed to find user in the server")
+}
+
+func cachedRoles(logger *zap.Logger, discord *discordgo.Session, guildIds []string) map[RoleID]RoleName {
+	roles := map[RoleID]RoleName{}
+
+	for _, guildId := range guildIds {
+		guild, err := discord.Guild(guildId)
+		if err != nil {
+			logger.Sugar().Warnf("failed to get information about guild id %s: %s", guildId, err.Error())
+			continue
+		}
+
+		for _, role := range guild.Roles {
+			roles[RoleID(role.ID)] = RoleName(role.Name)
+		}
+	}
+
+	return roles
 }

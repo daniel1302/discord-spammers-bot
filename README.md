@@ -4,8 +4,10 @@ The discord bot that register deleted message and send it to some dedicated chan
 
 ## Required permissions
 
+- `Message Content Intent`
 - `bot.Send Messages`
-- `bot. Read Message History`
+- `bot.Read Message History`
+- `bot.Manage Messages` - if you enable the `delete_invite_links` feature
 
 ## Example
 
