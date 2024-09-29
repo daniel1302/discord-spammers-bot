@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"slices"
 	"strings"
@@ -107,24 +108,15 @@ func deleteInviteLinks(
 		return
 	}
 
-	discordInviteLinkRegex := regexp.MustCompile(`(discord\.[a-z]{2,}|discordapp?\.[a-z]{2,})(.invite)?[\/\\]\w+`)
-	if !discordInviteLinkRegex.MatchString(message.Content) {
+	if !shouldMessageBeDeleted(logger, message.Content) {
 		return
 	}
 
-	logMessage := fmt.Sprintf("Suspicious message on the server\n================================\nAuthor: <@%s>\nChannel: <#%s>\nMessage: ```%s```",
-		message.Author.ID,
-		message.ChannelID,
-		message.Content,
-	)
-	logger.Info(logMessage)
-
-	discord.ChannelMessageSend(reportChannel, logMessage)
-
 	warnUserMessage := fmt.Sprintf(
-		"<@%s> Ops, looks like you posted invitation to another discord server. It is against rules of this server. Please ask administrator to post invitation link for you.",
+		config.WarnMessage,
 		message.Author.ID,
 	)
+
 	if _, err := discord.ChannelMessageSend(message.ChannelID, warnUserMessage); err != nil {
 		logger.Sugar().Error("failed to send warn message after posting server invitation: %s", err.Error())
 	}
@@ -132,6 +124,36 @@ func deleteInviteLinks(
 	if err := discord.ChannelMessageDelete(message.ChannelID, message.ID); err != nil {
 		logger.Sugar().Error("failed to send delete invitation with posted server invitation: %s", err.Error())
 	}
+}
+
+func shouldMessageBeDeleted(logger *zap.Logger, message string) bool {
+	// Example matches:
+	//	- discord.com/invite\ZnZ3nxZMuq
+	//	- discordapp.com/invite\ZnZ3nxZMuq
+	discordInviteLinkRegex := regexp.MustCompile(`(discord\.[a-z]{2,}|discordapp?\.[a-z]{2,})(.invite)?[\/\\]\w+`)
+	if discordInviteLinkRegex.MatchString(message) {
+		return true
+	}
+
+	// Some of the spammers send custom domains that returns only 301 Location: discord.com/invite/xxxx
+	// Example: https:/%20@@dis.army/chat/21312
+	urlRegex := regexp.MustCompile(`https:/\/?([^\s]+)`)
+	foundUrl := urlRegex.FindStringSubmatch(message)
+	if len(foundUrl) > 0 {
+		resp, err := http.Get(fmt.Sprintf("https://%s", foundUrl[1]))
+		if err != nil {
+			logger.Sugar().Infof("checking if message with link(%s) should be deleted, but cannot open page: %s", foundUrl[0], err.Error())
+			return false
+		}
+
+		// Follow all the redirects, etc and then check the latest Request URL
+		latestUrl := resp.Request.URL.String()
+		if discordInviteLinkRegex.MatchString(latestUrl) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func reportDeletedMessage(

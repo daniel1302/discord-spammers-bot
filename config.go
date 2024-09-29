@@ -33,6 +33,7 @@ type ConfigReportDeletedMessages struct {
 type ConfigDeleteInviteLinks struct {
 	Enabled          bool     `toml:"enabled"`
 	WhiteListedRoles []string `toml:"whitelisted_roles"`
+	WarnMessage      string   `toml:"warn_message"`
 }
 
 type ConfigFeatures struct {
