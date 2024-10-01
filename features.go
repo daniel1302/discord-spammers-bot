@@ -126,12 +126,16 @@ func deleteInviteLinks(
 	}
 }
 
-func shouldMessageBeDeleted(logger *zap.Logger, message string) bool {
+func isDiscordInvitation(message string) bool {
 	// Example matches:
 	//	- discord.com/invite\ZnZ3nxZMuq
 	//	- discordapp.com/invite\ZnZ3nxZMuq
-	discordInviteLinkRegex := regexp.MustCompile(`(discord\.[a-z]{2,}|discordapp?\.[a-z]{2,})(.invite)?[\/\\]\w+`)
-	if discordInviteLinkRegex.MatchString(message) {
+	inviteRegex := regexp.MustCompile(`(https?:\/\/)?(www\.)?((discord(app)?\.com[/\\]invite)|(discord\.gg))[/\\]\w+`)
+	return inviteRegex.MatchString(message)
+}
+
+func shouldMessageBeDeleted(logger *zap.Logger, message string) bool {
+	if isDiscordInvitation(message) {
 		return true
 	}
 
@@ -148,7 +152,7 @@ func shouldMessageBeDeleted(logger *zap.Logger, message string) bool {
 
 		// Follow all the redirects, etc and then check the latest Request URL
 		latestUrl := resp.Request.URL.String()
-		if discordInviteLinkRegex.MatchString(latestUrl) {
+		if isDiscordInvitation(latestUrl) {
 			return true
 		}
 	}
