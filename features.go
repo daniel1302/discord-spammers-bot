@@ -41,12 +41,12 @@ func reportSuspiciousMessage(
 	}
 
 	// Ignore messages from bot itself
-	if message.Author.ID == discord.State.User.ID {
+	if message.Author != nil && message.Author.ID == discord.State.User.ID {
 		return
 	}
 
 	if message.Author != nil && isUserWhitelisted(logger, discord, bot, config.WhiteListedRoles, message.Author.ID) {
-		logger.Sugar().Infof(
+		logger.Sugar().Debugf(
 			"User %s(%s) has whitelisted role, message does not need to be reported",
 			message.Author.Username,
 			message.Author.ID,
@@ -95,12 +95,12 @@ func deleteInviteLinks(
 	}
 
 	// Ignore messages from bot itself
-	if message.Author.ID == discord.State.User.ID {
+	if message.Author != nil && message.Author.ID == discord.State.User.ID {
 		return
 	}
 
 	if message.Author != nil && isUserWhitelisted(logger, discord, bot, config.WhiteListedRoles, message.Author.ID) {
-		logger.Sugar().Infof(
+		logger.Sugar().Debugf(
 			"User %s(%s) has whitelisted role, message does not need to be reported",
 			message.Author.Username,
 			message.Author.ID,
@@ -172,18 +172,19 @@ func reportDeletedMessage(
 		return
 	}
 
+	// If BeforeDelete is empty, there is nothing more We can do, as We lost track of this message.
+	// Sometimes message is deleted too fast to process it
+	if message.BeforeDelete == nil {
+		logger.Sugar().Warnf("Message %s is not in the state bot state", message.ID)
+		return
+	}
+
 	if message.BeforeDelete.Author != nil && isUserWhitelisted(logger, discord, bot, config.WhiteListedRoles, message.BeforeDelete.Author.ID) {
-		logger.Sugar().Infof(
+		logger.Sugar().Debugf(
 			"User %s(%s) has whitelisted role, message does not need to be reported",
 			message.BeforeDelete.Author.Username,
 			message.BeforeDelete.Author.ID,
 		)
-		return
-	}
-
-	// If BeforeDelete is empty, there is nothing more We can do, as We lost track of this message.
-	if message.BeforeDelete == nil {
-		logger.Sugar().Warnf("Message %s is not in the state", message.ID)
 		return
 	}
 
