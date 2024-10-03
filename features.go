@@ -16,16 +16,15 @@ func isUserWhitelisted(logger *zap.Logger, discord *discordgo.Session, bot *Disc
 		userDetails, err := cachedUser(logger, discord, bot, authorId)
 		if err != nil {
 			logger.Sugar().Warnf("failed to get cached user: %s", err.Error())
+			return false
 		}
 
 		for _, roleName := range whiteListerRoles {
 			if slices.Contains(userDetails.Roles, RoleName(roleName)) {
-
 				return true
 			}
 		}
 	}
-
 	return false
 }
 
@@ -65,6 +64,7 @@ func reportSuspiciousMessage(
 	for _, keyword := range config.Keywords {
 		if strings.Contains(strings.ToLower(message.Content), strings.ToLower(keyword)) {
 			suspicious = true
+			break
 		}
 	}
 
@@ -88,7 +88,7 @@ func deleteInviteLinks(
 	discord *discordgo.Session,
 	bot *DiscordBot,
 	config ConfigDeleteInviteLinks,
-	reportChannel string,
+	// reportChannel string,
 ) {
 	if !config.Enabled {
 		return

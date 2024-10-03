@@ -79,7 +79,7 @@ func newMessageHandler(logger *zap.Logger, bot *DiscordBot, config Config) inter
 	return func(discord *discordgo.Session, message *discordgo.MessageCreate) {
 		reportSuspiciousMessage(logger, message, discord, bot, config.Features.SuspiciousMessage, config.ReportChannel)
 
-		deleteInviteLinks(logger, message, discord, bot, config.Features.DeleteInviteLinks, config.ReportChannel)
+		deleteInviteLinks(logger, message, discord, bot, config.Features.DeleteInviteLinks)
 	}
 }
 
