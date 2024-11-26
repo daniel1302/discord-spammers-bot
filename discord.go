@@ -28,6 +28,7 @@ func Run(logger *zap.Logger, config *Config) error {
 
 	// open session
 	discord.Open()
+	discord.Debug = true
 	defer discord.Close() // close session, after function termination
 
 	if err := registerChannelsModeration(logger, discord, config.ModeratedChannels); err != nil {
@@ -80,6 +81,7 @@ func newMessageHandler(logger *zap.Logger, bot *DiscordBot, config Config) inter
 		reportSuspiciousMessage(logger, message, discord, bot, config.Features.SuspiciousMessage, config.ReportChannel)
 
 		deleteInviteLinks(logger, message, discord, bot, config.Features.DeleteInviteLinks)
+		commandWipe(logger, message, discord, bot, config.Commands.Wipe, config.ReportChannel)
 	}
 }
 
@@ -117,7 +119,12 @@ func cachedUser(logger *zap.Logger, discord *discordgo.Session, bot *DiscordBot,
 	}
 
 	for _, guildId := range bot.GuildsIDs() {
-		user, err := discord.GuildMember(guildId, UserId)
+		user, err := discord.GuildMember(
+			guildId,
+			UserId,
+			discordgo.WithRestRetries(5),
+			discordgo.WithRetryOnRatelimit(true),
+		)
 		if err != nil {
 			logger.Sugar().Debugf("user %s does not belong to guild %s: %s", UserId, guildId, err.Error())
 			continue
