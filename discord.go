@@ -28,7 +28,6 @@ func Run(logger *zap.Logger, config *Config) error {
 
 	// open session
 	discord.Open()
-	discord.Debug = true
 	defer discord.Close() // close session, after function termination
 
 	if err := registerChannelsModeration(logger, discord, config.ModeratedChannels); err != nil {
