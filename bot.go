@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,6 +38,10 @@ type DiscordBot struct {
 	cachedUsers      map[UserID]ServerUser
 	cachedRoles      map[RoleID]RoleName
 	cachedRolesReady bool
+
+	wipeInProgress   atomic.Bool
+	wipedMessagesMut sync.RWMutex
+	wipedMessages    []string
 }
 
 func NewDiscordBot(config Config) *DiscordBot {

@@ -172,6 +172,18 @@ func reportDeletedMessage(
 		return
 	}
 
+	bot.wipedMessagesMut.RLock()
+	messageHasBeenDeletedDuringWipeCommand := slices.Contains(bot.wipedMessages, message.ID)
+	bot.wipedMessagesMut.RUnlock()
+
+	if messageHasBeenDeletedDuringWipeCommand {
+		return
+	}
+
+	if message.Author != nil && message.Author.ID == discord.State.User.ID {
+		return
+	}
+
 	// If BeforeDelete is empty, there is nothing more We can do, as We lost track of this message.
 	// Sometimes message is deleted too fast to process it
 	if message.BeforeDelete == nil {

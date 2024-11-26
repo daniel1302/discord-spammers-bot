@@ -14,9 +14,22 @@ type Config struct {
 	MessageKeepTrackCount int `toml:"messages_keep_track_count"`
 
 	Features ConfigFeatures `toml:"features"`
+	Commands ConfigCommands `toml:"commands"`
 
 	ModeratedChannels []string `toml:"moderated_channels"`
 	ModeratedKeywords []string `toml:"moderated_keywords"`
+}
+
+type ConfigCommands struct {
+	Wipe ConfigCommandWipe `toml:"wipe"`
+}
+
+type ConfigCommandWipe struct {
+	Enabled bool   `toml:"enabled"`
+	Command string `toml:"command"`
+
+	WhitelistedRoles []string `toml:"whitelisted_roles"`
+	ActiveChannels   []string `toml:"active_channels"`
 }
 
 type ConfigSuspiciousMessage struct {

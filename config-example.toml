@@ -45,3 +45,16 @@ moderated_channels = [
             "Validators"
         ]
         warn_message = "<@%s> Ops, it looks like you posted an invitation to another Discord server. It is against the rules of this server. Please ask the administrator to post an invitation link for you.\n\nAll the invite messages to another server are more likely scams."
+    
+[commands]
+    [commands.wipe]
+        command = "$wipe"
+
+        enabled = true
+        whitelisted_roles = [
+            "Admins"
+        ]
+        active_channels = [
+            "12345", # general
+            "67890" # another channel
+        ]
