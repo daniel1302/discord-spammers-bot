@@ -35,6 +35,9 @@ func Run(logger *zap.Logger, config *Config) error {
 	}
 
 	discord.State.MaxMessageCount = config.MessageKeepTrackCount
+	if config.DiscordAPIDebug {
+		discord.LogLevel = discordgo.LogDebug
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -42,13 +45,14 @@ func Run(logger *zap.Logger, config *Config) error {
 	appCtx, appCtxCancel := context.WithCancel(context.Background())
 	defer appCtxCancel()
 	go bot.CacheRoles(appCtx, logger, discord)
+	go bot.ClearCachedWipedMessageIDs(appCtx, logger)
 
 	// Wait until bot is ready
 	if err := bot.WaitUntilReady(ctx); err != nil {
 		return fmt.Errorf("bot is not ready until: %w", err)
 	}
 
-	// keep bot running untill there is NO os interruption (ctrl + C)
+	// keep bot running until there is NO os interruption (ctrl + C)
 	logger.Info("Bot running....")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -77,16 +81,16 @@ func registerChannelsModeration(logger *zap.Logger, discord *discordgo.Session, 
 
 func newMessageHandler(logger *zap.Logger, bot *DiscordBot, config Config) interface{} {
 	return func(discord *discordgo.Session, message *discordgo.MessageCreate) {
-		reportSuspiciousMessage(logger, message, discord, bot, config.Features.SuspiciousMessage, config.ReportChannel)
+		reportSuspiciousMessage(logger.Named("Moderation.ReportSuspiciousMessage"), message, discord, bot, config.Features.SuspiciousMessage, config.ReportChannel)
 
-		deleteInviteLinks(logger, message, discord, bot, config.Features.DeleteInviteLinks)
-		commandWipe(logger, message, discord, bot, config.Commands.Wipe, config.ReportChannel)
+		deleteInviteLinks(logger.Named("Moderation.DeleteInviteLinks"), message, discord, bot, config.Features.DeleteInviteLinks)
+		commandWipe(logger.Named("Command.Wipe"), message, discord, bot, config.Commands.Wipe, config.ReportChannel)
 	}
 }
 
 func deleteMessageHandler(logger *zap.Logger, config Config, bot *DiscordBot) interface{} {
 	return func(discord *discordgo.Session, message *discordgo.MessageDelete) {
-		reportDeletedMessage(logger, message, discord, config.Features.ReportDeletedMessages, bot, config.ReportChannel)
+		reportDeletedMessage(logger.Named("Moderation.ReportDeletedMessage"), message, discord, config.Features.ReportDeletedMessages, bot, config.ReportChannel)
 	}
 }
 

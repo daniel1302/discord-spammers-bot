@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
@@ -37,6 +38,10 @@ func reportSuspiciousMessage(
 	reportChannel string,
 ) {
 	if !config.Enabled {
+		return
+	}
+
+	if !bot.IsModeratedChannel(message.ChannelID) {
 		return
 	}
 
@@ -94,6 +99,10 @@ func deleteInviteLinks(
 		return
 	}
 
+	if !bot.IsModeratedChannel(message.ChannelID) {
+		return
+	}
+
 	// Ignore messages from bot itself
 	if message.Author != nil && message.Author.ID == discord.State.User.ID {
 		return
@@ -140,11 +149,25 @@ func shouldMessageBeDeleted(logger *zap.Logger, message string) bool {
 	}
 
 	// Some of the spammers send custom domains that returns only 301 Location: discord.com/invite/xxxx
-	// Example: https:/%20@@dis.army/chat/21312
-	urlRegex := regexp.MustCompile(`https:/\/?([^\s]+)`)
+	// Examples:
+	//	- https:/%20@@dis.army/chat/21312
+	urlRegex := regexp.MustCompile(`(https?):/\/?([^\s]+)`)
 	foundUrl := urlRegex.FindStringSubmatch(message)
 	if len(foundUrl) > 0 {
-		resp, err := http.Get(fmt.Sprintf("https://%s", foundUrl[1]))
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		// We cannot just throw the found link into the http.Get function because scammers often put malformed chars there
+		req, err := BuildInvitationCheckHttpRequest(ctx, fmt.Sprintf("%s://%s", foundUrl[1], foundUrl[2]))
+		if err != nil {
+			logger.Error(
+				fmt.Sprintf("failed to build request to check invitation link for URL %s", foundUrl[0]),
+				zap.Error(err),
+			)
+		}
+		httpClient := DefaultHttpClient(5 * time.Second)
+		resp, err := httpClient.Do(req)
+
 		if err != nil {
 			logger.Sugar().Infof("checking if message with link(%s) should be deleted, but cannot open page: %s", foundUrl[0], err.Error())
 			return false
@@ -172,11 +195,12 @@ func reportDeletedMessage(
 		return
 	}
 
-	bot.wipedMessagesMut.RLock()
-	messageHasBeenDeletedDuringWipeCommand := slices.Contains(bot.wipedMessages, message.ID)
-	bot.wipedMessagesMut.RUnlock()
+	if !bot.IsModeratedChannel(message.ChannelID) {
+		return
+	}
 
-	if messageHasBeenDeletedDuringWipeCommand {
+	if bot.wipedMessages.Contains(message.ID) {
+		// Message deleted during the wipe command
 		return
 	}
 

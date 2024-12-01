@@ -23,14 +23,6 @@ func commandWipe(
 	config ConfigCommandWipe,
 	reportChannel string,
 ) {
-	if bot.wipeInProgress.Load() {
-		logger.Info("Wipe command is still running. Wait before it finishes")
-		return
-	}
-
-	bot.wipeInProgress.Store(true)
-	defer bot.wipeInProgress.Store(false)
-
 	if !config.Enabled {
 		return
 	}
@@ -65,6 +57,17 @@ func commandWipe(
 		return
 	}
 
+	if bot.wipeInProgress.Load() {
+		msg := fmt.Sprintf("Wipe command is still in progress, wait until it is finished before triggering next command.")
+		discord.ChannelMessageSend(reportChannel, msg)
+
+		logger.Info("Wipe command is still running. Wait before it finishes")
+		return
+	}
+
+	bot.wipeInProgress.Store(true)
+	defer bot.wipeInProgress.Store(false)
+
 	if !isUserWhitelisted(logger, discord, bot, config.WhitelistedRoles, message.Author.ID) {
 		logger.Sugar().Debugf(
 			"User %s(%s) is not allowed to execute wipe command",
@@ -77,6 +80,8 @@ func commandWipe(
 
 	errors := 5
 	deletedMessages := 0
+
+	firstMessage := ""
 
 	wipeCtx, wipeCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer wipeCancel()
@@ -94,13 +99,18 @@ func commandWipe(
 			return discord.ChannelMessages(
 				message.ChannelID,
 				1,
-				"",
+				firstMessage,
 				"",
 				"",
 				discordgo.WithContext(ctx),
 				discordgo.WithClient(DefaultHttpClient(DefaultRequestTimeout)),
 			)
 		}()
+
+		if firstMessage == "" {
+			firstMessage = message.ID
+			// continue
+		}
 
 		if err != nil {
 			errors--
@@ -114,9 +124,7 @@ func commandWipe(
 		}
 
 		m := messages[0]
-		bot.wipedMessagesMut.Lock()
-		bot.wipedMessages = append(bot.wipedMessages, m.ID)
-		bot.wipedMessagesMut.Unlock()
+		bot.wipedMessages.Add(m.ID, true)
 		time.Sleep(100 * time.Millisecond)
 
 		if err := func() error {

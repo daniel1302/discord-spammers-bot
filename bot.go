@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,9 +40,8 @@ type DiscordBot struct {
 	cachedRoles      map[RoleID]RoleName
 	cachedRolesReady bool
 
-	wipeInProgress   atomic.Bool
-	wipedMessagesMut sync.RWMutex
-	wipedMessages    []string
+	wipeInProgress atomic.Bool
+	wipedMessages  CachedList[string]
 }
 
 func NewDiscordBot(config Config) *DiscordBot {
@@ -49,6 +49,8 @@ func NewDiscordBot(config Config) *DiscordBot {
 		Config:      config,
 		cachedUsers: map[UserID]ServerUser{},
 		guildsIDs:   []string{},
+
+		wipedMessages: NewCacheList[string](),
 	}
 }
 
@@ -148,4 +150,33 @@ func (b *DiscordBot) CachedRole(id RoleID) RoleName {
 	}
 
 	return roleName
+}
+
+func (b *DiscordBot) ClearCachedWipedMessageIDs(ctx context.Context, logger *zap.Logger) {
+	t := time.NewTicker(cacheValid)
+
+	for {
+		removed := 0
+		for i, val := range b.wipedMessages.Data() {
+			if val.IsValid() {
+				continue
+			}
+
+			b.wipedMessages.Remove(i)
+			removed++
+		}
+
+		logger.Sugar().Info("Cleared %d messages IDs from cache", removed)
+
+		select {
+		case <-t.C:
+			continue
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (b *DiscordBot) IsModeratedChannel(channelID string) bool {
+	return slices.Contains(b.Config.ModeratedChannels, channelID)
 }

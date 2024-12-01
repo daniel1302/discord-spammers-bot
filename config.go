@@ -8,8 +8,10 @@ import (
 )
 
 type Config struct {
-	BotToken      string `toml:"bot_token"`
-	ReportChannel string `toml:"report_channel"`
+	Debug           bool   `toml:"debug"`
+	DiscordAPIDebug bool   `toml:"discord_api_debug"`
+	BotToken        string `toml:"bot_token"`
+	ReportChannel   string `toml:"report_channel"`
 
 	MessageKeepTrackCount int `toml:"messages_keep_track_count"`
 

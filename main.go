@@ -19,7 +19,15 @@ func main() {
 		panic(fmt.Sprintf("failed to parse config file: %s", err.Error()))
 	}
 
-	logger, err := zap.NewProduction()
+	level := zap.NewAtomicLevelAt(zap.InfoLevel)
+	if config.Debug {
+		level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	}
+	zapConfig := zap.NewProductionConfig()
+	zapConfig.Level = level
+
+	logger, err := zapConfig.Build()
+	logger.Level()
 	if err != nil {
 		panic(err)
 	}

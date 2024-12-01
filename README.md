@@ -9,6 +9,12 @@ The discord bot that register deleted message and send it to some dedicated chan
 - `bot.Read Message History`
 - `bot.Manage Messages` - if you enable the `delete_invite_links` feature
 
+## Add bot to your server
+
+1. [Add an application to your server](https://discord.com/developers/applications)
+2. Update config.toml
+3. Start your bot
+
 ## Example
 
 ```
